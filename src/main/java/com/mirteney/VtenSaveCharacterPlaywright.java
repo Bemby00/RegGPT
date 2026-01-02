@@ -68,6 +68,26 @@ public class VtenSaveCharacterPlaywright {
      * @param userId идентификатор пользователя Telegram
      */
     public void run(@NotNull Long userId) {
+        runInternal(userId, config.isHeadlessBrowser());
+    }
+
+    /**
+     * Выполняет процесс регистрации аккаунта с явным указанием режима headless.
+     *
+     * @param userId    идентификатор пользователя Telegram
+     * @param headless  признак headless режима браузера
+     */
+    void runWithHeadless(@NotNull Long userId, boolean headless) {
+        runInternal(userId, headless);
+    }
+
+    /**
+     * Выполняет регистрацию с повторными попытками.
+     *
+     * @param userId   идентификатор пользователя Telegram
+     * @param headless признак headless режима браузера
+     */
+    private void runInternal(@NotNull Long userId, boolean headless) {
         int attempt = 0;
         Exception lastException = null;
 
@@ -76,7 +96,7 @@ public class VtenSaveCharacterPlaywright {
             log.info("Попытка {} из {}", attempt, config.getMaxRetries());
 
             try {
-                executeRegistration(userId);
+                executeRegistration(userId, headless);
                 log.info("Регистрация успешно завершена для userId={}", userId);
                 return;
             } catch (PlaywrightException e) {
@@ -106,12 +126,13 @@ public class VtenSaveCharacterPlaywright {
      * Выполняет процесс регистрации с использованием браузера.
      *
      * @param userId идентификатор пользователя Telegram
+     * @param headless признак headless режима браузера
      * @throws IOException если не удалось сохранить данные
      */
-    private void executeRegistration(@NotNull Long userId) throws IOException {
+    private void executeRegistration(@NotNull Long userId, boolean headless) throws IOException {
         try (Playwright playwright = Playwright.create()) {
             Browser browser = playwright.chromium().launch(
-                    new BrowserType.LaunchOptions().setHeadless(config.isHeadlessBrowser()));
+                    new BrowserType.LaunchOptions().setHeadless(headless));
 
             BrowserContext context = browser.newContext(new Browser.NewContextOptions()
                     .setViewportSize(375, 667));

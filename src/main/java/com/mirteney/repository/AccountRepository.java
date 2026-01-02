@@ -106,6 +106,21 @@ public class AccountRepository {
     }
 
     /**
+     * Возвращает список аккаунтов, привязанных к конкретному пользователю.
+     *
+     * @param userId идентификатор пользователя Telegram
+     * @return неизменяемый список аккаунтов пользователя
+     * @throws IOException если файл невозможно прочитать
+     */
+    public @NotNull List<Account> findAccountsByUserId(@NotNull Long userId) throws IOException {
+        List<Account> accounts = loadAccounts();
+        List<Account> userAccounts = accounts.stream()
+                .filter(account -> account.userId().equals(userId))
+                .collect(Collectors.toList());
+        return Collections.unmodifiableList(userAccounts);
+    }
+
+    /**
      * Сохраняет новый аккаунт в JSON-файл с шифрованием пароля.
      *
      * @param account аккаунт для сохранения

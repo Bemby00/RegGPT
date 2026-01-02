@@ -68,4 +68,25 @@ class AccountRepositoryTest {
         assertThrows(UnsupportedOperationException.class,
                 () -> accounts.add(new Account(2L, "User2", "Password2!")));
     }
+
+    /**
+     * Проверяет фильтрацию аккаунтов по идентификатору пользователя.
+     */
+    @Test
+    void findAccountsByUserId_returnsOnlyMatchingAccounts(@TempDir Path tempDir) throws IOException {
+        // given
+        Path filePath = tempDir.resolve("accounts.json");
+        AccountRepository repository = new AccountRepository(filePath);
+        repository.saveAccount(new Account(1L, "User1", "Password1!"));
+        repository.saveAccount(new Account(2L, "User2", "Password2!"));
+        repository.saveAccount(new Account(1L, "User3", "Password3!"));
+
+        // when
+        List<Account> accounts = repository.findAccountsByUserId(1L);
+
+        // then
+        assertEquals(2, accounts.size());
+        assertEquals("User1", accounts.get(0).login());
+        assertEquals("User3", accounts.get(1).login());
+    }
 }
