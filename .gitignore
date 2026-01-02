@@ -46,3 +46,4 @@ build/
 ### Application ###
 accounts.json
 config.properties
+.claude/
