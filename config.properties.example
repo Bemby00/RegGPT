@@ -1,0 +1,42 @@
+# Конфигурационный файл для RegGPT
+# Скопируйте этот файл в config.properties и заполните своими значениями
+
+# ===== Обязательные настройки =====
+
+# Токен Telegram бота (получите у @BotFather)
+telegram.bot.token=YOUR_BOT_TOKEN_HERE
+
+# ===== Настройки шифрования =====
+
+# Ключ для шифрования паролей (рекомендуется использовать сложный пароль)
+# Если не указан, пароли будут сохраняться в открытом виде
+encryption.key=
+
+# ===== Настройки Playwright =====
+
+# URL страницы тренировки
+vten.training.url=https://m.vten.ru/training/battle
+
+# URL страницы сохранения персонажа
+vten.save.url=https://m.vten.ru/user/save
+
+# Селектор заголовка выбора класса героя
+vten.hero.class.selector=text=ВЫБЕРИ КЛАСС ГЕРОЯ
+
+# Селектор поля логина
+vten.login.selector=input[name='loginContainer:name']
+
+# Селектор поля пароля
+vten.password.selector=input[name='passwordContainer:password']
+
+# Селектор кнопки сохранения
+vten.save.button.selector=button.btn-rich3._main
+
+# Режим headless (true - без интерфейса, false - с интерфейсом)
+vten.headless=false
+
+# Таймаут загрузки страниц в миллисекундах
+vten.page.timeout=30000
+
+# Максимальное количество попыток при ошибках
+vten.max.retries=3

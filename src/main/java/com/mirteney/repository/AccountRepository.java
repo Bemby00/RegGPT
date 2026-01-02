@@ -3,6 +3,7 @@ package com.mirteney.repository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mirteney.model.Account;
+import com.mirteney.security.PasswordEncryption;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,11 +20,12 @@ import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
- * Репозиторий для хранения аккаунтов в JSON-файле.
+ * Репозиторий для хранения аккаунтов в JSON-файле с поддержкой шифрования паролей.
  *
- * <p>Обеспечивает чтение и запись массива аккаунтов в файл.</p>
+ * <p>Обеспечивает чтение и запись массива аккаунтов в файл с опциональным шифрованием паролей.</p>
  */
 public class AccountRepository {
 
@@ -31,6 +33,7 @@ public class AccountRepository {
 
     private final Path filePath;
     private final ObjectMapper mapper;
+    private final PasswordEncryption encryption;
 
     /**
      * Создаёт репозиторий с файловым путём по умолчанию.
@@ -38,7 +41,7 @@ public class AccountRepository {
      * @param filePath путь к JSON-файлу
      */
     public AccountRepository(@NotNull Path filePath) {
-        this(filePath, new ObjectMapper());
+        this(filePath, new ObjectMapper(), new PasswordEncryption());
     }
 
     /**
@@ -48,12 +51,32 @@ public class AccountRepository {
      * @param mapper   ObjectMapper для сериализации
      */
     public AccountRepository(@NotNull Path filePath, @NotNull ObjectMapper mapper) {
-        this.filePath = filePath;
-        this.mapper = mapper;
+        this(filePath, mapper, new PasswordEncryption());
     }
 
     /**
-     * Возвращает все сохранённые аккаунты.
+     * Создаёт репозиторий с указанными зависимостями.
+     *
+     * @param filePath   путь к JSON-файлу
+     * @param mapper     ObjectMapper для сериализации
+     * @param encryption утилита шифрования паролей
+     */
+    public AccountRepository(@NotNull Path filePath,
+                             @NotNull ObjectMapper mapper,
+                             @NotNull PasswordEncryption encryption) {
+        this.filePath = filePath;
+        this.mapper = mapper;
+        this.encryption = encryption;
+
+        if (encryption.isEncryptionEnabled()) {
+            log.info("Шифрование паролей включено");
+        } else {
+            log.warn("Шифрование паролей отключено. Установите ENCRYPTION_KEY для включения шифрования.");
+        }
+    }
+
+    /**
+     * Возвращает все сохранённые аккаунты с дешифрованными паролями.
      *
      * @return неизменяемый список аккаунтов
      * @throws IOException если файл невозможно прочитать
@@ -70,11 +93,20 @@ public class AccountRepository {
 
         List<Account> accounts = mapper.readValue(jsonBytes, new TypeReference<List<Account>>() {
         });
-        return Collections.unmodifiableList(accounts);
+
+        // Дешифруем пароли
+        List<Account> decryptedAccounts = accounts.stream()
+                .map(account -> new Account(
+                        account.userId(),
+                        account.login(),
+                        encryption.decrypt(account.password())))
+                .collect(Collectors.toList());
+
+        return Collections.unmodifiableList(decryptedAccounts);
     }
 
     /**
-     * Сохраняет новый аккаунт в JSON-файл.
+     * Сохраняет новый аккаунт в JSON-файл с шифрованием пароля.
      *
      * @param account аккаунт для сохранения
      * @throws IOException если запись не удалась
@@ -87,29 +119,41 @@ public class AccountRepository {
                 StandardOpenOption.WRITE);
              FileLock ignored = channel.lock()) {
 
-            List<Account> accounts = new ArrayList<>(loadAccounts(channel));
-            accounts.add(account);
+            // Читаем через channel, чтобы использовать блокировку
+            List<Account> accounts = new ArrayList<>(loadAccountsFromChannel(channel));
 
-            // Записываем обновлённый список в временный файл и затем атомарно заменяем.
-            Path parentDir = filePath.toAbsolutePath().getParent();
-            if (parentDir == null) {
-                parentDir = Path.of(".");
+            // Шифруем пароль перед сохранением
+            Account encryptedAccount = new Account(
+                    account.userId(),
+                    account.login(),
+                    encryption.encrypt(account.password()));
+
+            accounts.add(encryptedAccount);
+
+            // Записываем обновлённый список в тот же файл через channel
+            channel.truncate(0);
+            channel.position(0);
+
+            byte[] jsonBytes = mapper.writerWithDefaultPrettyPrinter()
+                    .writeValueAsBytes(accounts);
+            ByteBuffer buffer = ByteBuffer.wrap(jsonBytes);
+
+            while (buffer.hasRemaining()) {
+                channel.write(buffer);
             }
-            Path tempFile = Files.createTempFile(parentDir, "accounts", ".json");
-            mapper.writerWithDefaultPrettyPrinter().writeValue(tempFile.toFile(), accounts);
-            Files.move(tempFile, filePath, StandardCopyOption.REPLACE_EXISTING);
-            log.info("Аккаунт сохранён: login={}", account.login());
+
+            log.info("Аккаунт сохранён: userId={}, login={}", account.userId(), account.login());
         }
     }
 
     /**
-     * Считывает аккаунты из канала, чтобы не конфликтовать с файловой блокировкой.
+     * Считывает аккаунты из канала без дешифрования (используется при сохранении).
      *
      * @param channel канал файла с установленной блокировкой
-     * @return неизменяемый список аккаунтов
+     * @return список аккаунтов с зашифрованными паролями
      * @throws IOException если чтение завершилось ошибкой
      */
-    private @NotNull List<Account> loadAccounts(@NotNull SeekableByteChannel channel) throws IOException {
+    private @NotNull List<Account> loadAccountsFromChannel(@NotNull SeekableByteChannel channel) throws IOException {
         // Перемещаемся в начало файла для корректного чтения.
         channel.position(0);
         long size = channel.size();
@@ -131,6 +175,6 @@ public class AccountRepository {
 
         List<Account> accounts = mapper.readValue(jsonBytes, new TypeReference<List<Account>>() {
         });
-        return Collections.unmodifiableList(accounts);
+        return new ArrayList<>(accounts);
     }
 }

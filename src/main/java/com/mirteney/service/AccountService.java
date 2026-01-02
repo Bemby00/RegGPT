@@ -3,7 +3,7 @@ package com.mirteney.service;
 import com.mirteney.model.Account;
 import org.jetbrains.annotations.NotNull;
 
-import java.security.SecureRandom;
+import java.util.UUID;
 
 /**
  * Сервис бизнес-логики для генерации аккаунтов.
@@ -15,7 +15,6 @@ public class AccountService {
     private static final String LOGIN_PREFIX = "User";
     private static final int DEFAULT_PASSWORD_LENGTH = 12;
 
-    private final SecureRandom secureRandom = new SecureRandom();
     private final PasswordGenerator passwordGenerator;
 
     /**
@@ -28,24 +27,25 @@ public class AccountService {
     }
 
     /**
-     * Генерирует новый аккаунт со стандартной длиной пароля.
+     * Генерирует новый аккаунт со стандартной длиной пароля для указанного пользователя.
      *
+     * @param userId идентификатор пользователя Telegram
      * @return новый аккаунт
      */
-    public @NotNull Account createAccount() {
+    public @NotNull Account createAccount(@NotNull Long userId) {
         String login = generateLogin();
         String password = generatePassword(DEFAULT_PASSWORD_LENGTH);
-        return new Account(login, password);
+        return new Account(userId, login, password);
     }
 
     /**
-     * Генерирует логин с префиксом и случайным числом.
+     * Генерирует уникальный логин на основе UUID.
      *
      * @return логин
      */
     public @NotNull String generateLogin() {
-        int suffix = secureRandom.nextInt(1000);
-        return LOGIN_PREFIX + suffix;
+        String uuid = UUID.randomUUID().toString().replace("-", "");
+        return LOGIN_PREFIX + uuid.substring(0, 8);
     }
 
     /**

@@ -14,6 +14,7 @@ public class PasswordGenerator {
     private static final String PASSWORD_CHARS =
             "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%&*";
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+    private static final int MAX_PASSWORD_LENGTH = 128;
 
     /**
      * Генерирует случайный пароль указанной длины.
@@ -24,6 +25,9 @@ public class PasswordGenerator {
     public @NotNull String generate(int length) {
         if (length <= 0) {
             throw new IllegalArgumentException("Длина пароля должна быть положительной");
+        }
+        if (length > MAX_PASSWORD_LENGTH) {
+            throw new IllegalArgumentException("Длина пароля не должна превышать " + MAX_PASSWORD_LENGTH);
         }
 
         StringBuilder password = new StringBuilder(length);

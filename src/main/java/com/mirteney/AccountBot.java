@@ -1,5 +1,6 @@
 package com.mirteney;
 
+import com.mirteney.config.AppConfig;
 import com.mirteney.model.Account;
 import com.mirteney.repository.AccountRepository;
 import com.mirteney.service.AccountService;
@@ -7,16 +8,16 @@ import com.mirteney.service.PasswordGenerator;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.telegram.telegrambots.bots.TelegramLongPollingBot;
+import org.telegram.telegrambots.longpolling.util.LongPollingSingleThreadUpdateConsumer;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
-import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
+import org.telegram.telegrambots.meta.api.objects.message.Message;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
+import org.telegram.telegrambots.meta.generics.TelegramClient;
 
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Locale;
-import java.util.Optional;
 
 /**
  * Телеграм-бот для генерации аккаунтов и их сохранения в JSON-файл.
@@ -24,60 +25,62 @@ import java.util.Optional;
  * <p>Класс отвечает только за обработку апдейтов Telegram и делегирует
  * бизнес-логику сервису, а операции ввода/вывода — репозиторию.</p>
  */
-public class AccountBot extends TelegramLongPollingBot {
+public class AccountBot implements LongPollingSingleThreadUpdateConsumer {
 
     private static final Logger log = LoggerFactory.getLogger(AccountBot.class);
     private static final String GENERATE_COMMAND = "/generate";
 
     private final AccountService accountService;
     private final AccountRepository accountRepository;
-    private final String botUsername;
+    private final TelegramClient telegramClient;
     private final String botToken;
 
     /**
-     * Создаёт бота с зависимостями по умолчанию и загрузкой настроек из окружения.
+     * Создаёт бота с зависимостями по умолчанию и загрузкой настроек из config.properties.
+     *
+     * @param telegramClient клиент Telegram API
      */
-    public AccountBot() {
-        this(new AccountService(new PasswordGenerator()),
+    public AccountBot(@NotNull TelegramClient telegramClient) {
+        this(telegramClient, new AppConfig());
+    }
+
+    /**
+     * Создаёт бота с зависимостями по умолчанию и указанной конфигурацией.
+     *
+     * @param telegramClient клиент Telegram API
+     * @param config         конфигурация приложения
+     */
+    public AccountBot(@NotNull TelegramClient telegramClient,
+                      @NotNull AppConfig config) {
+        this(telegramClient,
+                new AccountService(new PasswordGenerator()),
                 new AccountRepository(Path.of("accounts.json")),
-                resolveEnv("TELEGRAM_BOT_USERNAME"),
-                resolveEnv("TELEGRAM_BOT_TOKEN"));
+                config.getBotToken());
     }
 
     /**
      * Создаёт бота с внедрением зависимостей.
      *
+     * @param telegramClient    клиент Telegram API
      * @param accountService    сервис генерации аккаунтов
      * @param accountRepository репозиторий для сохранения данных
-     * @param botUsername       имя бота
      * @param botToken          токен бота
      */
-    public AccountBot(@NotNull AccountService accountService,
+    public AccountBot(@NotNull TelegramClient telegramClient,
+                      @NotNull AccountService accountService,
                       @NotNull AccountRepository accountRepository,
-                      @NotNull String botUsername,
                       @NotNull String botToken) {
+        this.telegramClient = telegramClient;
         this.accountService = accountService;
         this.accountRepository = accountRepository;
-        this.botUsername = botUsername;
         this.botToken = botToken;
     }
 
     /**
-     * Возвращает имя бота, загруженное из конфигурации.
-     *
-     * @return имя бота
-     */
-    @Override
-    public String getBotUsername() {
-        return botUsername;
-    }
-
-    /**
-     * Возвращает токен бота, загруженный из конфигурации.
+     * Возвращает токен бота.
      *
      * @return токен бота
      */
-    @Override
     public String getBotToken() {
         return botToken;
     }
@@ -88,23 +91,24 @@ public class AccountBot extends TelegramLongPollingBot {
      * @param update обновление Telegram
      */
     @Override
-    public void onUpdateReceived(@NotNull Update update) {
+    public void consume(@NotNull Update update) {
         // Проверяем наличие сообщения, чтобы избежать NullPointerException.
         if (!update.hasMessage()) {
             return;
         }
 
         Message message = update.getMessage();
-        if (message == null || !message.hasText()) {
+        if (message == null || message.getText() == null || message.getText().isBlank()) {
             return;
         }
 
         String userMessage = message.getText().trim();
         long chatId = message.getChatId();
+        Long userId = message.getFrom().getId();
 
         // Обрабатываем команду генерации аккаунта.
         if (isGenerateCommand(userMessage)) {
-            handleGenerateCommand(chatId);
+            handleGenerateCommand(chatId, userId);
         }
     }
 
@@ -112,10 +116,11 @@ public class AccountBot extends TelegramLongPollingBot {
      * Обрабатывает команду генерации аккаунта и отправляет результат пользователю.
      *
      * @param chatId идентификатор чата
+     * @param userId идентификатор пользователя
      */
-    private void handleGenerateCommand(long chatId) {
+    private void handleGenerateCommand(long chatId, @NotNull Long userId) {
         try {
-            Account account = accountService.createAccount();
+            Account account = accountService.createAccount(userId);
             accountRepository.saveAccount(account);
 
             // Формируем ответ без логирования чувствительных данных.
@@ -123,9 +128,13 @@ public class AccountBot extends TelegramLongPollingBot {
                     "Логин: " + account.login() + "\n" +
                     "Пароль: " + account.password();
             sendResponse(chatId, responseText);
+            log.info("Аккаунт создан для userId={}", userId);
         } catch (IOException e) {
-            log.error("Не удалось сохранить аккаунт для chatId={}", chatId, e);
+            log.error("Не удалось сохранить аккаунт для userId={}, chatId={}", userId, chatId, e);
             sendResponse(chatId, "Ошибка при сохранении аккаунта. Попробуйте позже.");
+        } catch (Exception e) {
+            log.error("Неожиданная ошибка при генерации аккаунта для userId={}", userId, e);
+            sendResponse(chatId, "Произошла ошибка. Попробуйте позже.");
         }
     }
 
@@ -136,11 +145,12 @@ public class AccountBot extends TelegramLongPollingBot {
      * @param text   текст ответа
      */
     private void sendResponse(long chatId, @NotNull String text) {
-        SendMessage message = new SendMessage();
-        message.setChatId(String.valueOf(chatId));
-        message.setText(text);
+        SendMessage message = SendMessage.builder()
+                .chatId(chatId)
+                .text(text)
+                .build();
         try {
-            execute(message);
+            telegramClient.execute(message);
         } catch (TelegramApiException e) {
             log.error("Не удалось отправить сообщение в чат {}", chatId, e);
         }
@@ -154,18 +164,5 @@ public class AccountBot extends TelegramLongPollingBot {
      */
     private boolean isGenerateCommand(@NotNull String userMessage) {
         return userMessage.toLowerCase(Locale.ROOT).equals(GENERATE_COMMAND);
-    }
-
-    /**
-     * Получает значение переменной окружения или бросает исключение.
-     *
-     * @param envName имя переменной окружения
-     * @return значение переменной окружения
-     */
-    private static String resolveEnv(@NotNull String envName) {
-        return Optional.ofNullable(System.getenv(envName))
-                .filter(value -> !value.isBlank())
-                .orElseThrow(() -> new IllegalStateException(
-                        "Не задана переменная окружения: " + envName));
     }
 }
