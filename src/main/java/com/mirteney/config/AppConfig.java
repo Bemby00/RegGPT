@@ -9,6 +9,16 @@ import org.jetbrains.annotations.NotNull;
  */
 public class AppConfig {
 
+    /**
+     * Фиксированные URL и селекторы для работы с vten.ru.
+     */
+    private static final String DEFAULT_TRAINING_URL = "https://m.vten.ru/training/battle";
+    private static final String DEFAULT_SAVE_URL = "https://m.vten.ru/user/save";
+    private static final String DEFAULT_HERO_CLASS_SELECTOR = "text=ВЫБЕРИ КЛАСС ГЕРОЯ";
+    private static final String DEFAULT_LOGIN_INPUT_SELECTOR = "input[name='loginContainer:name']";
+    private static final String DEFAULT_PASSWORD_INPUT_SELECTOR = "input[name='passwordContainer:password']";
+    private static final String DEFAULT_SAVE_BUTTON_SELECTOR = "button.btn-rich3._main";
+
     private final ConfigLoader configLoader;
 
     // Telegram настройки
@@ -36,13 +46,13 @@ public class AppConfig {
         this.botToken = configLoader.getRequiredString("telegram.bot.token", "TELEGRAM_BOT_TOKEN");
         this.encryptionKey = configLoader.getString("encryption.key", "ENCRYPTION_KEY", "");
 
-        // Загружаем настройки Playwright
-        this.trainingUrl = configLoader.getString("vten.training.url", "VTEN_TRAINING_URL", "https://m.vten.ru/training/battle");
-        this.saveUrl = configLoader.getString("vten.save.url", "VTEN_SAVE_URL", "https://m.vten.ru/user/save");
-        this.heroClassSelector = configLoader.getString("vten.hero.class.selector", "VTEN_HERO_CLASS_SELECTOR", "text=ВЫБЕРИ КЛАСС ГЕРОЯ");
-        this.loginInputSelector = configLoader.getString("vten.login.selector", "VTEN_LOGIN_SELECTOR", "input[name='loginContainer:name']");
-        this.passwordInputSelector = configLoader.getString("vten.password.selector", "VTEN_PASSWORD_SELECTOR", "input[name='passwordContainer:password']");
-        this.saveButtonSelector = configLoader.getString("vten.save.button.selector", "VTEN_SAVE_BUTTON_SELECTOR", "button.btn-rich3._main");
+        // Фиксированные настройки Playwright, не зависящие от конфигурации
+        this.trainingUrl = DEFAULT_TRAINING_URL;
+        this.saveUrl = DEFAULT_SAVE_URL;
+        this.heroClassSelector = DEFAULT_HERO_CLASS_SELECTOR;
+        this.loginInputSelector = DEFAULT_LOGIN_INPUT_SELECTOR;
+        this.passwordInputSelector = DEFAULT_PASSWORD_INPUT_SELECTOR;
+        this.saveButtonSelector = DEFAULT_SAVE_BUTTON_SELECTOR;
         this.headlessBrowser = configLoader.getBoolean("vten.headless", "VTEN_HEADLESS", false);
         this.pageLoadTimeout = configLoader.getInt("vten.page.timeout", "VTEN_PAGE_TIMEOUT", 30000);
         this.maxRetries = configLoader.getInt("vten.max.retries", "VTEN_MAX_RETRIES", 3);
