@@ -40,7 +40,7 @@ class AccountRepositoryTest {
         // given
         Path filePath = tempDir.resolve("accounts.json");
         AccountRepository repository = new AccountRepository(filePath);
-        Account account = new Account("User123", "Password1!");
+        Account account = new Account(1L, "User123", "Password1!");
 
         // when
         repository.saveAccount(account);
@@ -59,13 +59,13 @@ class AccountRepositoryTest {
         // given
         Path filePath = tempDir.resolve("accounts.json");
         AccountRepository repository = new AccountRepository(filePath);
-        repository.saveAccount(new Account("User1", "Password1!"));
+        repository.saveAccount(new Account(1L, "User1", "Password1!"));
 
         // when
         List<Account> accounts = repository.loadAccounts();
 
         // then
         assertThrows(UnsupportedOperationException.class,
-                () -> accounts.add(new Account("User2", "Password2!")));
+                () -> accounts.add(new Account(2L, "User2", "Password2!")));
     }
 }

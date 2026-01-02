@@ -53,7 +53,7 @@ class AccountServiceTest {
         AccountService service = new AccountService(new PasswordGenerator());
 
         // when
-        Account account = service.createAccount();
+        Account account = service.createAccount(1L);
 
         // then
         assertNotNull(account);
