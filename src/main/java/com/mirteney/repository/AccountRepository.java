@@ -8,8 +8,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
+import java.nio.channels.SeekableByteChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -85,7 +87,7 @@ public class AccountRepository {
                 StandardOpenOption.WRITE);
              FileLock ignored = channel.lock()) {
 
-            List<Account> accounts = new ArrayList<>(loadAccounts());
+            List<Account> accounts = new ArrayList<>(loadAccounts(channel));
             accounts.add(account);
 
             // Записываем обновлённый список в временный файл и затем атомарно заменяем.
@@ -98,5 +100,37 @@ public class AccountRepository {
             Files.move(tempFile, filePath, StandardCopyOption.REPLACE_EXISTING);
             log.info("Аккаунт сохранён: login={}", account.login());
         }
+    }
+
+    /**
+     * Считывает аккаунты из канала, чтобы не конфликтовать с файловой блокировкой.
+     *
+     * @param channel канал файла с установленной блокировкой
+     * @return неизменяемый список аккаунтов
+     * @throws IOException если чтение завершилось ошибкой
+     */
+    private @NotNull List<Account> loadAccounts(@NotNull SeekableByteChannel channel) throws IOException {
+        // Перемещаемся в начало файла для корректного чтения.
+        channel.position(0);
+        long size = channel.size();
+        if (size == 0) {
+            return List.of();
+        }
+
+        if (size > Integer.MAX_VALUE) {
+            throw new IOException("Файл аккаунтов слишком большой для загрузки в память");
+        }
+
+        ByteBuffer buffer = ByteBuffer.allocate((int) size);
+        while (buffer.hasRemaining()) {
+            if (channel.read(buffer) == -1) {
+                break;
+            }
+        }
+        byte[] jsonBytes = buffer.array();
+
+        List<Account> accounts = mapper.readValue(jsonBytes, new TypeReference<List<Account>>() {
+        });
+        return Collections.unmodifiableList(accounts);
     }
 }
