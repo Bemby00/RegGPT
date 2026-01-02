@@ -49,7 +49,6 @@ public class BotMain {
         try (TelegramBotsLongPollingApplication application = new TelegramBotsLongPollingApplication()) {
             // Регистрируем обработчик обновлений.
             application.registerBot(botToken, new AccountBot(telegramClient, config));
-            application.start();
             log.info("Бот запущен и ожидает обновления.");
 
             // Блокируем поток, чтобы приложение не завершилось.
